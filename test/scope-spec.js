@@ -9,6 +9,7 @@ describe('Scope', () => {
     })
 
     describe('digest', () => {
+        
         let scope
 
         beforeEach(() => {
@@ -542,5 +543,140 @@ describe('Scope', () => {
             expect(scope.counter).toBe(1)            
         })
 
+        it('catches exceptions in $evalAsync', (done) => {
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$evalAsync((scope) => {
+                throw 'Error'
+            })
+
+            setTimeout(() => {
+                expect(scope.counter).toBe(1)
+                done()
+            }, 10)  
+        })
+
+        it('catches exceptions in $applyAsync', (done) => {
+            scope.counter = 0
+
+            scope.$applyAsync((scope) => {
+                throw 'Error'
+            })
+
+            scope.$applyAsync((scope) => {
+                throw 'Error'
+            })
+
+            scope.$applyAsync((scope) => {
+                scope.counter++
+            })
+
+            setTimeout(() => {
+                expect(scope.counter).toBe(1)
+                done()
+            }, 10)              
+        })
+
+        it('catches exceptions in $$postDigest', () => {
+            scope.didRun = false
+
+            scope.$$postDigest((scope) => {
+                throw 'Error'
+            })
+
+            scope.$$postDigest((scope) => {
+                scope.didRun = true
+            })
+
+            scope.$digest()
+            expect(scope.didRun).toBe(true)
+        })
+
+        it('allows destroying a $watch with a removal function', () => {
+            scope.aValue = 'abc'
+            scope.counter = 0
+
+            let destroyWatcher = scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.aValue = 'def'
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.aValue = 'ghi'
+            destroyWatcher()
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('allows destroying a $watch during digest', () => {
+            let watchCalls = []
+            scope.aValue = 'abc'
+
+            scope.$watch((scope) => {
+                watchCalls.push(1)
+                return scope.aValue
+            })
+
+            let destroyWatcher = scope.$watch((scope) => {
+                watchCalls.push(2)
+                destroyWatcher()
+            })
+
+            scope.$watch((scope) => {
+                watchCalls.push(3)
+                return scope.aValue
+            })
+
+            scope.$digest()
+            expect(watchCalls).toEqual([1, 2, 3, 1, 3])
+        })
+
+        it('allows a $watch to destroy another during digest', () => {
+            scope.aValue = 'abc'
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, () => {
+                destroyWatcher()
+            })
+
+            let destroyWatcher = scope.$watch((scope) => {
+            })
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+        })
+
+        it('allows destroying several $watches during digest' , () => {
+            
+        })
+    })
+
+    describe('watchGroup', () => {
+        let scope
+
+        beforeEach(() => {
+            scope = new Scope()
+        }) 
     })
 })

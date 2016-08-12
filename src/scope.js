@@ -20,8 +20,15 @@ export class Scope {
             valueEq,
             last: initWatchVal
         }
-        this.$$watchers.push(watcher)
+        this.$$watchers.unshift(watcher)
         this.$$lastDirtyWatch = null
+        return () => {
+            let index = this.$$watchers.indexOf(watcher)
+            if(index >= 0) {
+                this.$$watchers.splice(index, 1)
+                this.$$lastDirtyWatch = null
+            }
+        }
     }
 
     $$areEqual(newValue, oldValue, valueEq) {
@@ -35,7 +42,7 @@ export class Scope {
 
     $$digestOnce() {
         let dirty = false
-        _.each(this.$$watchers , watcher => {
+        _.eachRight(this.$$watchers , watcher => {
             try {
                 let newValue = watcher.watchFn(this)
                 let oldValue = watcher.last
@@ -69,8 +76,12 @@ export class Scope {
 
         do {
             while(this.$$asyncQueue.length) {
-                let asyncTask = this.$$asyncQueue.shift()
-                asyncTask.scope.$eval(asyncTask.expression)
+                try {
+                    let asyncTask = this.$$asyncQueue.shift()
+                    asyncTask.scope.$eval(asyncTask.expression)
+                } catch(e) {
+                    console.error(e)
+                }
             }
             dirty = this.$$digestOnce()
             ttl--
@@ -81,7 +92,11 @@ export class Scope {
         } while (dirty || this.$$asyncQueue.length)
 
         while(this.$$postDigestQueue.length) {
-            this.$$postDigestQueue.shift()()
+            try {
+                this.$$postDigestQueue.shift()()
+            } catch(e) {
+                console.error(e)
+            }
         }
 
         this.$clearPhase()
@@ -135,7 +150,11 @@ export class Scope {
 
     $$flushApplyAsync() {
         while(this.$$applyAsyncQueue.length) {
-            this.$$applyAsyncQueue.shift()()
+            try {
+                this.$$applyAsyncQueue.shift()()
+            } catch (e) {
+                console.error(e)
+            }
         }
         this.$$applyAsyncId = null
     }
