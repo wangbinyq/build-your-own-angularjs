@@ -311,5 +311,236 @@ describe('Scope', () => {
             scope.$digest()
             expect(scope.asyncEvaluatedTimes).toBe(2)            
         })
+
+        it('eventually halts $evalAsyncs added by watches', () => {
+            scope.aValue = [1, 2, 3]
+
+            scope.$watch((scope) => {
+                scope.$evalAsync((scope) => {
+                })
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+            })
+
+            expect(() => { scope.$digest() }).toThrow()          
+        })
+
+        it('has a $$phase field whose value is the current digest phase', () => {
+            scope.aValue = [1, 2, 3]
+
+            scope.phaseInWatchFunction = undefined
+            scope.phaseInListenerFunction = undefined
+            scope.phaseInApplyFunction = undefined
+
+            scope.$watch((scope)=>{
+                scope.phaseInWatchFunction = scope.$$phase
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.phaseInListenerFunction = scope.$$phase
+            })
+
+            scope.$apply((scope) => {
+                scope.phaseInApplyFunction = scope.$$phase
+            })
+
+            expect(scope.phaseInWatchFunction).toBe('$digest')
+            expect(scope.phaseInListenerFunction).toBe('$digest')
+            expect(scope.phaseInApplyFunction).toBe('$apply')
+        })
+
+        it('schedules a digest in $evalAsync', (done) => {
+            scope.aValue = 'abc'
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$evalAsync((scope) => {
+            })
+
+            expect(scope.counter).toBe(0)
+
+            setTimeout(() => {
+                expect(scope.counter).toBe(1)
+                done()
+            }, 10)
+        })
+
+        it('allows async $apply with $applyAsync', (done) => {
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.$applyAsync((scope) => {
+                scope.aValue = 'abc'
+            })
+
+            expect(scope.counter).toBe(1)
+
+            setTimeout(() => {
+                expect(scope.counter).toBe(2)
+                done()
+            }, 10)            
+        })
+
+        it('never executes $applyAsync\'ed function in the same cycle', (done) => {
+            scope.aValue = [1, 2, 3]
+            scope.asyncApplied = false
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.$applyAsync((scope) => {
+                    scope.asyncApplied = true
+                })
+            })
+
+            scope.$digest()
+            expect(scope.asyncApplied).toBe(false)
+            setTimeout(() => {
+                expect(scope.asyncApplied).toBe(true)
+                done()
+            }, 10)              
+        })
+
+        it('coalesces many calls to $applyAsync', (done) =>{
+            scope.aValue = [1, 2, 3]
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                scope.counter++
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+               
+            })
+
+            scope.$applyAsync((scope) => {
+                scope.aValue = 'abc'
+            })
+
+            scope.$applyAsync((scope) => {
+                scope.aValue = 'edf'
+            })
+
+            expect(scope.counter).toBe(0)
+            setTimeout(() => {
+                expect(scope.counter).toBe(2)
+                done()
+            }, 10)              
+        })
+
+        it('cancels and flushes $applyAsync if digested first', (done) =>{
+            scope.aValue = [1, 2, 3]
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                scope.counter++
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+               
+            })
+
+            scope.$applyAsync((scope) => {
+                scope.aValue = 'abc'
+            })
+
+            scope.$applyAsync((scope) => {
+                scope.aValue = 'edf'
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+            expect(scope.aValue).toBe('edf')
+
+            setTimeout(() => {
+                expect(scope.counter).toBe(2)
+                done()
+            }, 10)              
+        })
+
+        it('runs a $$postDigest function after each digest', () => {
+            scope.counter = 0
+
+            scope.$$postDigest((scope)=> {
+                scope.counter++
+            })
+
+            expect(scope.counter).toBe(0)
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)        
+        })
+
+        it('does not include $$postDigest in the digest', () => {
+            scope.aValue = 'origin value'
+
+            scope.$$postDigest((scope) => {
+                scope.aValue = 'changed value'
+            })
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.watchedValue = newValue
+            })
+
+            scope.$digest()
+            expect(scope.watchedValue).toBe('origin value')
+
+            scope.$digest()
+            expect(scope.watchedValue).toBe('changed value')
+        })
+
+        it('catches exceptions in watch functions and continues', () => {
+            scope.aValue = 'abc'
+            scope.counter = 0
+
+            scope.$watch(() => {
+                throw 'Error'
+            })
+
+            scope.$watch(() => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+        })
+
+        it('catches exceptions in listener functions and continues', () => {
+            scope.aValue = 'abc'
+            scope.counter = 0
+
+            scope.$watch((scope) => {
+                return scope.aValue
+            }, () => {
+                throw 'Error'
+            })
+
+            scope.$watch(() => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)            
+        })
+
     })
 })
