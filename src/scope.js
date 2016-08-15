@@ -11,6 +11,8 @@ export class Scope {
         this.$$postDigestQueue = []
         this.$$applyAsyncId = null
         this.$$phase = null
+        this.$$children = []
+        this.$root = this
     }
 
     $watch(watchFn, listenerFn=() => {}, valueEq=false) {
@@ -21,12 +23,12 @@ export class Scope {
             last: initWatchVal
         }
         this.$$watchers.unshift(watcher)
-        this.$$lastDirtyWatch = null
+        this.$root.$$lastDirtyWatch = null
         return () => {
             let index = this.$$watchers.indexOf(watcher)
             if(index >= 0) {
                 this.$$watchers.splice(index, 1)
-                this.$$lastDirtyWatch = null
+                this.$root.$$lastDirtyWatch = null
             }
         }
     }
@@ -42,22 +44,30 @@ export class Scope {
 
     $$digestOnce() {
         let dirty = false
-        _.eachRight(this.$$watchers , watcher => {
-            try {
-                let newValue = watcher.watchFn(this)
-                let oldValue = watcher.last
-                let valueEq = watcher.valueEq
-                if(this.$$areEqual(newValue, oldValue, valueEq)) {
-                    return this.$$lastDirtyWatch !== watcher
+        let continueLoop = true
+
+        this.$$everyScope((scope) => {
+            let newValue, oldValue
+            _.eachRight(scope.$$watchers , watcher => {
+                try {
+                    newValue = watcher.watchFn(scope)
+                    oldValue = watcher.last
+                    let valueEq = watcher.valueEq
+                    if(!scope.$$areEqual(newValue, oldValue, valueEq)) {
+                        this.$root.$$lastDirtyWatch = watcher
+                        oldValue = oldValue === initWatchVal ? newValue : oldValue
+                        watcher.last = valueEq ? _.cloneDeep(newValue) : newValue
+                        watcher.listenerFn(newValue, oldValue, scope)
+                        dirty = true
+                    } else if(this.$root.$$lastDirtyWatch === watcher) {
+                        continueLoop = false
+                        return false
+                    }
+                } catch(e) {
+                    console.error(e)
                 }
-                this.$$lastDirtyWatch = watcher
-                oldValue = oldValue === initWatchVal ? newValue : oldValue
-                watcher.last = valueEq ? _.cloneDeep(newValue) : newValue
-                watcher.listenerFn(newValue, oldValue, this)
-                dirty = true
-            } catch(e) {
-                console.error(e)
-            }
+            })
+            return continueLoop
         })
 
         return dirty
@@ -66,11 +76,11 @@ export class Scope {
     $digest() {
         let ttl = 10
         let dirty
-        this.$$lastDirtyWatch = null
+        this.$root.$$lastDirtyWatch = null
         this.$beginPhase('$digest')
 
-        if(this.$$applyAsyncId) {
-            clearTimeout(this.$$applyAsyncId)
+        if(this.$root.$$applyAsyncId) {
+            clearTimeout(this.$root.$$applyAsyncId)
             this.$$flushApplyAsync()
         }
 
@@ -111,7 +121,7 @@ export class Scope {
         if(!this.$$phase && !this.$$asyncQueue.length) {
             setTimeout(() => {
                 if(this.$$asyncQueue.length) {
-                    this.$digest()
+                    this.$root.$digest()
                 }
             }, 0)
         }
@@ -128,7 +138,7 @@ export class Scope {
             return this.$eval(expr, locals)
         } finally {
             this.$clearPhase()
-            this.$digest()
+            this.$root.$digest()
         }
     }
 
@@ -137,11 +147,11 @@ export class Scope {
             this.$eval(expr)
         })
 
-        if(this.$$applyAsyncId) {
+        if(this.$root.$$applyAsyncId) {
             return
         }
 
-        this.$$applyAsyncId = setTimeout(() => {
+        this.$root.$$applyAsyncId = setTimeout(() => {
             this.$apply(() => {
                 this.$$flushApplyAsync()
             })
@@ -156,7 +166,7 @@ export class Scope {
                 console.error(e)
             }
         }
-        this.$$applyAsyncId = null
+        this.$root.$$applyAsyncId = null
     }
 
     $beginPhase(phase) {
@@ -175,4 +185,50 @@ export class Scope {
             expr(this)
         })
     }
+
+    $new(isolated, parent) {
+        parent = parent || this
+
+        function ChildScope() {
+            this.$$watchers = []
+            this.$$children = []
+        }
+        ChildScope.prototype = this
+
+        let child
+        if(isolated) {
+            child = new Scope()
+            child.$root = parent.$root
+            child.$$asyncQueue = parent.$$asyncQueue
+            child.$$postDigestQueue = parent.$$postDigestQueue
+            child.$$applyAsyncQueue = parent.$$applyAsyncQueue
+        } else {
+            child = new ChildScope()
+            
+        }
+        child.$parent = parent
+        parent.$$children.push(child)
+        return child
+    }
+
+    $$everyScope(fn) {
+        if(fn(this)) {
+            return this.$$children.every(child => {
+                return child.$$everyScope(fn)
+            })
+        } else {
+            return false
+        }
+    }
+
+    $destroy() {
+        if(this.$parent) {
+            _.remove(this.$parent.$$children, (child) => {
+                child === this
+            })
+            this.$parent = null
+        }
+        this.$$watchers = null
+    }
+
 }
