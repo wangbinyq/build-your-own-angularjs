@@ -1,4 +1,4 @@
-import _ from 'lodash'
+import _ from './utils'
 
 function initWatchVal() {}
 
@@ -13,6 +13,8 @@ export class Scope {
         this.$$phase = null
         this.$$children = []
         this.$root = this
+
+        this.$$listeners = {}
     }
 
     $watch(watchFn, listenerFn=() => {}, valueEq=false) {
@@ -192,6 +194,7 @@ export class Scope {
         function ChildScope() {
             this.$$watchers = []
             this.$$children = []
+            this.$$listeners = {}
         }
         ChildScope.prototype = this
 
@@ -229,6 +232,165 @@ export class Scope {
             this.$parent = null
         }
         this.$$watchers = null
+    }
+
+    $watchCollection(watchFn, listenerFn) {
+
+        let newValue, oldValue, changeCount = 0
+        let oldLength
+        let listenerOldValue
+        let tracklistenerOldValue = listenerFn.length > 1
+        let firstRun = true
+
+        const internalWatchFn = (scope) => {
+            let newLength
+            newValue = watchFn(scope)
+            if(_.isObject(newValue)) {
+                if(_.isArrayLike(newValue)) {
+                    if(!_.isArray(oldValue)) {
+                        changeCount++
+                        oldValue = []
+                    }
+                    if(newValue.length !== oldValue.length) {
+                        changeCount++
+                        oldValue.length = newValue.length
+                    }
+                    _.each(newValue, (newItem, i) => {
+                        if(!this.$$areEqual(newItem, oldValue[i], false)) {
+                            oldValue[i] = newItem
+                            changeCount++
+                        }
+                    })
+                } else {
+                    if(!_.isObject(oldValue) || _.isArrayLike(oldValue)) {
+                        oldValue = {}
+                        changeCount++
+                        oldLength = 0
+                    }
+
+                    newLength = 0
+
+                    _.forOwn(newValue, (value, key) => {
+                        newLength++
+                        if(oldValue.hasOwnProperty(key)) {
+                            if(!this.$$areEqual(oldValue[key], value)) {
+                                oldValue[key] = value
+                                changeCount++
+                            }
+                        } else {
+                            oldValue[key] = value
+                            changeCount++
+                            oldLength++
+                        }
+
+                    })
+
+                    if(oldLength > newLength) {
+                        changeCount++
+                        _.forOwn(oldValue, (value, key) => {
+                            if(!newValue.hasOwnProperty(key)) {
+                                delete oldValue[key]
+                                oldLength--
+                            }
+                        })
+                    }
+
+                }
+            } else {
+                if(!this.$$areEqual(newValue, oldValue, false)) {
+                    changeCount++
+                }
+                oldValue = newValue
+            } 
+            return changeCount
+        }
+
+        const internalListenerFn = () => {
+            if(firstRun) {
+                listenerFn(newValue, newValue, this)
+                firstRun = false
+            } else {
+                listenerFn(newValue, listenerOldValue, this)
+            }
+            if(tracklistenerOldValue) {
+                listenerOldValue = _.cloneDeep(newValue)
+            }
+        }
+
+        return this.$watch(internalWatchFn, internalListenerFn)
+    }
+
+    $on(eventName, listenerFn) {
+        let listeners = this.$$listeners[eventName]
+        if(!listeners) {
+            this.$$listeners[eventName] = listeners = []
+        }
+        listeners.push(listenerFn)
+
+        return () => {
+            const index = listeners.indexOf(listenerFn)
+            if(index >= 0) {
+                listeners[index] = null
+            }
+        }
+    }
+
+    $emit(eventName) {
+        let propagationStopped = false
+        const event = {
+            name: eventName,
+            targetScope: this,
+            stopPropagation() {
+                propagationStopped = true
+            },
+            defaultPrevented: false,
+            preventDefault() {
+                this.defaultPrevented = true
+            }
+        }
+        const additionalArgs = Array.prototype.slice(arguments, 1)
+        const listenerArgs = [event].concat(additionalArgs)
+        let scope = this
+        do {
+            event.currentScope = scope
+            scope.$$fireEventOnScope(eventName, listenerArgs)
+            scope = scope.$parent
+        } while(scope && !propagationStopped)
+        event.currentScope = null
+        return event
+    }
+
+    $broadcast(eventName) {
+        const event = {
+            name: eventName,
+            targetScope: this,
+            defaultPrevented: false,
+            preventDefault() {
+                this.defaultPrevented = true
+            }
+        }
+        const additionalArgs = Array.prototype.slice(arguments, 1)
+        const listenerArgs = [event].concat(additionalArgs)
+        this.$$everyScope((scope) => {
+            event.currentScope = scope
+            scope.$$fireEventOnScope(eventName, listenerArgs)
+            return true
+        })
+        event.currentScope = null
+        return event
+    }
+
+    $$fireEventOnScope(eventName, listenerArgs) {
+        const listeners = this.$$listeners[eventName] || []
+        let i = 0
+        while(i < listeners.length) {
+            if(listeners[i] === null) {
+                listeners.splice(i, 1)
+            } else {
+                listeners[i].apply(this, listenerArgs)
+                i++
+            }
+        }
     }
 
 }

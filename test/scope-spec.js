@@ -1,3 +1,5 @@
+/*eslint no-unused-vars: 0*/
+
 import { Scope } from '../src/scope'
 import _ from 'lodash'
 
@@ -1014,7 +1016,684 @@ describe('Scope', () => {
     })
 
     describe('watchCollection', () => {
-        
+        let scope
+
+        beforeEach(() => {
+            scope = new Scope()
+        })
+
+        it('works like a normal watch for non-collections', () => {
+            scope.aValue = 42
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.valueProvided = newValue
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+            expect(scope.valueProvided).toBe(42)
+
+            scope.aValue = 43
+            scope.$digest()
+            expect(scope.valueProvided).toBe(43)
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('works like a normal watch for NaNs', () => {
+            scope.aValue = NaN
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+        })
+
+        it('notices when the value becomes an array', () => {
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arr = [1, 2, 3]
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('notices an item added to an array', () => {
+            scope.arr = [1, 2, 3]
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arr.push(4)
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('notices an item removed from an array', () => {
+            scope.arr = [1, 2, 3]
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arr.shift()
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('notices an item replaced in an array', () => {
+            scope.arr = [1, 2, 3]
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arr[1] = 42
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('notices items reordered in an array', () => {
+            scope.arr = [2, 1, 3]
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arr.sort()
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)            
+        })
+
+        it('does not fail on NaNs in arrays', () => {
+            scope.arr = [2, NaN, 3]
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arr
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)            
+        })
+
+        it('notices an item replaced in an arguments object', () => {
+            (function() {
+                scope.arrayLike = arguments
+            })(1, 2, 3)
+
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arrayLike
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.arrayLike[1] = 42
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+        })
+
+        it('notices an item replaced in a NodeList object', () => {
+            document.documentElement.appendChild(document.createElement('div'))
+            scope.arrayLike = document.getElementsByTagName('div')
+
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.arrayLike
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            document.documentElement.appendChild(document.createElement('div'))
+            scope.$digest()
+            expect(scope.counter).toBe(2)            
+        })
+
+        it('notices when the value becomes an object', () => {
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.obj
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.obj = {a:1}
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)             
+        })
+
+        it('notices when an attribute is added to an object', () => {
+            scope.counter = 0
+            scope.obj = {a:1}
+
+            scope.$watchCollection((scope) => {
+                return scope.obj
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.obj.b = 2
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)             
+        })
+
+        it('notices when an attribute is changed in an object', () => {
+            scope.counter = 0
+            scope.obj = {a:1}
+
+            scope.$watchCollection((scope) => {
+                return scope.obj
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.obj.a = 2
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)             
+        })
+
+        it('does not fail on NaN attributes in objects', () => {
+            scope.counter = 0
+            scope.obj = {a:NaN}
+
+            scope.$watchCollection((scope) => {
+                return scope.obj
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            scope.obj.a = 2
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)              
+        })
+
+        it('notices when an attribute is removed from an object', () => {
+            scope.counter = 0
+            scope.obj = {a:1}
+
+            scope.$watchCollection((scope) => {
+                return scope.obj
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            expect(scope.counter).toBe(1)
+
+            delete scope.obj.a
+            scope.$digest()
+            expect(scope.counter).toBe(2)
+
+            scope.$digest()
+            expect(scope.counter).toBe(2)              
+        })
+
+        it('does not consider any object with a length property an array', () => {
+            scope.obj = {length: 42, otherKey: 'abc'}
+            scope.counter = 0
+
+            scope.$watchCollection((scope) => {
+                return scope.obj 
+            }, (newValue, oldValue, scope) => {
+                scope.counter++
+            })
+
+            scope.$digest()
+            scope.obj.newKey = 'def'
+            scope.$digest()
+            expect(scope.counter).toBe(2) 
+        })
+
+        it('gives the old non-collection value to listeners', () => {
+            scope.aValue = 42
+            let oldValueGiven
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                oldValueGiven = oldValue
+            })
+
+            scope.$digest()
+
+            scope.aValue = 43
+            scope.$digest()
+            expect(oldValueGiven).toBe(42)
+        })
+
+        it('gives the old array value to listeners', () => {
+            scope.aValue = [1, 2, 3]
+            let oldValueGiven
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                oldValueGiven = oldValue
+            })
+
+            scope.$digest()
+
+            scope.aValue.push(4)
+            scope.$digest()
+            expect(oldValueGiven).toEqual([1, 2, 3])
+        })
+
+        it('gives the old object value to listeners', () => {
+            scope.aValue = {a:1}
+            let oldValueGiven
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                oldValueGiven = oldValue
+            })
+
+            scope.$digest()
+
+            scope.aValue.a = 2
+            scope.$digest()
+            expect(oldValueGiven).toEqual({a:1})
+        })
+
+        it('uses the new value as the old value on first digest', () => {
+            scope.aValue = {a:1}
+            let oldValueGiven
+
+            scope.$watchCollection((scope) => {
+                return scope.aValue
+            }, (newValue, oldValue, scope) => {
+                oldValueGiven = oldValue
+            })
+
+            scope.$digest()
+
+            expect(oldValueGiven).toEqual({a:1})            
+        })
+    })
+
+    describe('Events', () => {
+        let scope, parent, child, isolatedChild
+
+        beforeEach(() => {
+            parent = new Scope()
+            scope = parent.$new()
+            child = scope.$new()
+            isolatedChild = scope.$new(true)
+        })
+
+        it('allows registering listeners', () => {
+            const listener1 = () => {}
+            const listener2 = () => {}
+            const listener3 = () => {}
+
+            scope.$on('someEvent', listener1)
+            scope.$on('someEvent', listener2)
+            scope.$on('someOtherEvent', listener3)
+
+            expect(scope.$$listeners).toEqual({
+                someEvent: [listener1, listener2],
+                someOtherEvent: [listener3]
+            })
+        })
+
+        it('registers different listeners for every scope', () => {
+            const listener1 = () => {}
+            const listener2 = () => {}
+            const listener3 = () => {}
+
+            scope.$on('someEvent', listener1)
+            child.$on('someEvent', listener2)
+            isolatedChild.$on('someOtherEvent', listener3)
+
+            expect(scope.$$listeners).toEqual({someEvent: [listener1]})                       
+            expect(child.$$listeners).toEqual({someEvent: [listener2]})                       
+            expect(isolatedChild.$$listeners).toEqual({someOtherEvent: [listener3]})                       
+        })
+
+        _.each(['$emit', '$broadcast'], (method) => {
+            it('calls the listeners of the matching event on ' + method, () => {
+                const listener1 = jasmine.createSpy()
+                const listener2 = jasmine.createSpy()
+                
+                scope.$on('someEvent', listener1)
+                scope.$on('someOtherEvent', listener2)
+
+                scope[method]('someEvent')
+                expect(listener1).toHaveBeenCalled()
+                expect(listener2).not.toHaveBeenCalled()
+            })
+
+            it('passes an event object with a name to listeners on ' + method, () => {
+                const listener = jasmine.createSpy()
+                
+                scope.$on('someEvent', listener)
+
+                scope[method]('someEvent')
+                expect(listener).toHaveBeenCalled()
+                expect(listener.calls.mostRecent().args[0].name).toEqual('someEvent')
+            })
+
+            it('passes the same event object to each listener on ' + method, () => {
+                const listener1 = jasmine.createSpy()
+                const listener2 = jasmine.createSpy()
+                
+                scope.$on('someEvent', listener1)
+                scope.$on('someEvent', listener2)
+
+                scope[method]('someEvent')
+                const event1 = listener1.calls.mostRecent().args[0]
+                const event2 = listener2.calls.mostRecent().args[0]
+                expect(event1).toBe(event2)
+            })
+
+            it('returns the event object on ' + method, () => {
+                const returnedEvent = scope[method]('someEvent')
+                expect(returnedEvent).toBeDefined()
+                expect(returnedEvent.name).toBe('someEvent')                
+            })
+
+            it('can be deregistered ' + method, () => {
+                const listener = jasmine.createSpy()
+                const deregistered = scope.$on('someEvent', listener)
+
+                deregistered()
+
+                scope[method]('someEvent')
+                expect(listener).not.toHaveBeenCalled()
+            })
+
+            it('does not skip the next listener when removed on ' + method, () => {
+                let deregister
+                const listener = function() {
+                    deregister()
+                }
+                const nextListener = jasmine.createSpy()
+
+                deregister = scope.$on('someEvent', listener)
+                scope.$on('someEvent', nextListener)
+
+                scope[method]('someEvent')
+
+                expect(nextListener).toHaveBeenCalled()
+            })
+
+            it('is sets defaultPrevented when preventDefault called on' + method, () => {
+                const listener = (event) => {
+                    event.preventDefault()
+                }
+
+                scope.$on('someEvent', listener)
+
+                const event = scope[method]('someEvent')
+
+                expect(event.defaultPrevented).toBe(true)
+            })
+        })
+
+        it('propagates up the scope hierarchy on $emit', () => {
+            const scopeListener = jasmine.createSpy()
+            const parentListener = jasmine.createSpy()
+
+            parent.$on('someEvent', parentListener)
+            scope.$on('someEvent', scopeListener)
+
+            scope.$emit('someEvent')
+
+            expect(scopeListener).toHaveBeenCalled()            
+            expect(parentListener).toHaveBeenCalled()            
+        })
+
+        it('propagates down the scope hierarchy on $broadcast', () => {
+            const scopeListener = jasmine.createSpy()
+            const parentListener = jasmine.createSpy()
+            const isolatedListener = jasmine.createSpy()
+
+            parent.$on('someEvent', parentListener)
+            scope.$on('someEvent', scopeListener)
+            isolatedChild.$on('someEvent', isolatedListener)
+
+            parent.$broadcast('someEvent')
+
+            expect(isolatedListener).toHaveBeenCalled()            
+            expect(scopeListener).toHaveBeenCalled()            
+            expect(parentListener).toHaveBeenCalled()             
+        })
+
+        it('propagates the same event down on $broadcast', () => {
+            const scopeListener = jasmine.createSpy()
+            const childListener = jasmine.createSpy()
+            
+            scope.$on('someEvent', scopeListener)
+            child.$on('someEvent', childListener)
+
+            scope.$broadcast('someEvent')
+            const scopeEvent = scopeListener.calls.mostRecent().args[0]
+            const childEvent = childListener.calls.mostRecent().args[0]
+            expect(scopeEvent).toBe(childEvent)            
+        })
+
+        it('attaches targetScope on $emit', () => {
+            const scopeListener = jasmine.createSpy()
+            const parentListener = jasmine.createSpy()
+            
+            scope.$on('someEvent', scopeListener)
+            parent.$on('someEvent', parentListener)
+
+            scope.$emit('someEvent')
+            
+            expect(scopeListener.calls.mostRecent().args[0].targetScope).toBe(scope)
+            expect(parentListener.calls.mostRecent().args[0].targetScope).toBe(scope)            
+        })
+
+        it('attaches targetScope on $broadcast', () => {
+            const scopeListener = jasmine.createSpy()
+            const childListener = jasmine.createSpy()
+            
+            scope.$on('someEvent', scopeListener)
+            child.$on('someEvent', childListener)
+
+            scope.$broadcast('someEvent')
+            
+            expect(scopeListener.calls.mostRecent().args[0].targetScope).toBe(scope)
+            expect(childListener.calls.mostRecent().args[0].targetScope).toBe(scope)            
+        })
+
+        it('attaches currentScope on $emit', () => {
+            let currentScopeOnScope, currentScopeOnParent
+
+            const scopeListener = (event) => {
+                currentScopeOnScope = event.currentScope
+            }
+
+            const parentListener = (event) => {
+                currentScopeOnParent = event.currentScope
+            }
+
+            scope.$on('someEvent', scopeListener)
+            parent.$on('someEvent', parentListener)
+
+            scope.$emit('someEvent')
+
+            expect(currentScopeOnScope).toBe(scope)
+            expect(currentScopeOnParent).toBe(parent)
+        })
+
+        it('attaches currentScope on $broadcast', () => {
+            let currentScopeOnScope, currentScopeOnChild
+
+            const scopeListener = (event) => {
+                currentScopeOnScope = event.currentScope
+            }
+
+            const childListener = (event) => {
+                currentScopeOnChild = event.currentScope
+            }
+
+            scope.$on('someEvent', scopeListener)
+            child.$on('someEvent', childListener)
+
+            scope.$broadcast('someEvent')
+
+            expect(currentScopeOnScope).toBe(scope)
+            expect(currentScopeOnChild).toBe(child)
+        })
+
+        it('sets currentScope to null after propagation on $emit', () => {
+            let event
+            const scopeListener = (evt) => {
+                event = evt
+            }
+
+            scope.$on('someEvent', scopeListener)
+            scope.$emit('someEvent')
+
+            expect(event.currentScope).toBe(null)
+        })
+
+        it('sets currentScope to null after propagation on $broadcast', () => {
+            let event
+            const scopeListener = (evt) => {
+                event = evt
+            }
+
+            scope.$on('someEvent', scopeListener)
+            scope.$broadcast('someEvent')
+
+            expect(event.currentScope).toBe(null)
+        })
+
+        it('does not propagate to parents when stopped', () => {
+            const scopeListener = (event) => {
+                event.stopPropagation()
+            }
+            const parentListener = jasmine.createSpy()
+
+            scope.$on('someEvent', scopeListener)
+            parent.$on('someEvent', parentListener)
+
+            scope.$emit('someEvent')
+
+            expect(parentListener).not.toHaveBeenCalled()
+        })
+
+        it('is received by listeners on current scope after being stopped', () => {
+            const listener1 = (event) => {
+                event.stopPropagation()
+            }
+            const listener2 = jasmine.createSpy()
+            
+            scope.$on('someEvent', listener1)
+            scope.$on('someEvent', listener2)
+
+            scope.$emit('someEvent')
+
+            expect(listener2).toHaveBeenCalled()           
+        })
+
+        it('fire destroy when destroyed', () => {
+            
+        })
     })
 
 })
