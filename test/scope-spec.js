@@ -1529,6 +1529,20 @@ describe('Scope', () => {
 
                 expect(event.defaultPrevented).toBe(true)
             })
+
+            it('does not stop on exceptions on ' + method, () => {
+                const listener1 = () => {
+                    throw 'listener1 throwing an expection'
+                }
+                const listener2 = jasmine.createSpy()
+
+                scope.$on('someEvent', listener1)
+                scope.$on('someEvent', listener2)
+
+                scope.$emit('someEvent')
+
+                expect(listener2).toHaveBeenCalled()
+            })
         })
 
         it('propagates up the scope hierarchy on $emit', () => {
@@ -1693,6 +1707,33 @@ describe('Scope', () => {
 
         it('fire destroy when destroyed', () => {
             
+            const listener = jasmine.createSpy()
+            
+            scope.$on('destroy', listener)
+
+            scope.$destroy()
+
+            expect(listener).toHaveBeenCalled()
+        })
+
+        it('fires $destroy on children destroyed', () => {
+            const listener = jasmine.createSpy()
+            
+            child.$on('destroy', listener)
+
+            scope.$destroy()
+
+            expect(listener).toHaveBeenCalled()            
+        })
+
+        it('no longers calls listeners after destroyed', () => {
+            const listener = jasmine.createSpy()
+
+            scope.$on('someEvent', listener)
+            scope.$destroy()
+            scope.$emit('someEvent')
+
+            expect(listener).not.toHaveBeenCalled()
         })
     })
 

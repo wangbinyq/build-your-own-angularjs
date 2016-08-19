@@ -225,6 +225,7 @@ export class Scope {
     }
 
     $destroy() {
+        this.$broadcast('destroy')
         if(this.$parent) {
             _.remove(this.$parent.$$children, (child) => {
                 child === this
@@ -232,6 +233,7 @@ export class Scope {
             this.$parent = null
         }
         this.$$watchers = null
+        this.$$listeners = {}
     }
 
     $watchCollection(watchFn, listenerFn) {
@@ -387,7 +389,11 @@ export class Scope {
             if(listeners[i] === null) {
                 listeners.splice(i, 1)
             } else {
-                listeners[i].apply(this, listenerArgs)
+                try {
+                    listeners[i].apply(this, listenerArgs)
+                } catch (e) {
+                    console.error(e)
+                }
                 i++
             }
         }
