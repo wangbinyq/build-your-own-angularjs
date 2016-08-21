@@ -215,6 +215,156 @@ describe('parse', () => {
             var locals = {aKey: {}}
             expect(fn(scope, locals)).toBeUndefined()
         })
+
+        it('parses a simple computed property access', () => {
+            const fn = parse('aKey["anotherKey"]')
+            expect(fn({aKey: {anotherKey: 42}})).toBe(42)
+        })
+        
+        it('parses a computed numeric array access', () => {
+            var fn = parse('anArray[1]')
+            expect(fn({anArray: [1, 2, 3]})).toBe(2)
+        })
+
+        it('parses a computed access with another key as property', () => {
+            var fn = parse('lock[key]')
+            expect(fn({key: 'theKey', lock: {theKey: 42}})).toBe(42)
+        })
+
+        it('parses computed access with another access as property' , () => {
+            var fn = parse('lock[keys["aKey"]]')
+            expect(fn({keys: {aKey: 'theKey'}, lock: {theKey: 42}})).toBe(42)
+        })
+
+        it('parses a function call', () => {
+            var fn = parse('aFunction()')
+            expect(fn({aFunction:() => {return 42}})).toBe(42)
+        })
+
+        it('parses a function call with a single number argument', () => {
+            var fn = parse('aFunction(42)')
+            expect(fn({aFunction: (a) => {return a}})).toBe(42)
+        })
+
+        it('parses a function call with a single identifier argument', () => {
+            var fn = parse('aFunction(n)')
+            expect(fn({n: 42, aFunction: (a) => {return a}})).toBe(42)
+        })
+
+        it('parses a function call with a single function call argument', () => {
+            var fn = parse('aFunction(n())')
+            expect(fn({n: () => {return 42}, aFunction: (a) => {return a}})).toBe(42)
+        })
+
+        it('parses a function call with multiple arguments', () => {
+            var fn = parse('aFunction(37, n, fn())')
+            expect(fn({
+                aFunction: (a1, a2, a3) => {return a1 + a2 + a3},
+                n: 3,
+                fn: () =>{return 2}
+            })).toBe(42)
+        })
+
+        it('calls methods accessed as computed properties', () => {
+            var scope = {
+                anObject: {
+                    aMember: 42,
+                    aFunction: function() {
+                        return this.aMember
+                    }
+                }
+            }
+
+            var fn = parse('anObject["aFunction"]()')
+            expect(fn(scope)).toBe(42)
+        })
+
+        it('calls methods accessed as non-computed properties', () => {
+            var scope = {
+                anObject: {
+                    aMember: 42,
+                    aFunction: function() {
+                        return this.aMember
+                    }
+                }
+            }
+
+            var fn = parse('anObject.aFunction()')
+            expect(fn(scope)).toBe(42)
+        })
+
+        it('binds bare functions to the scope', () => {
+            var scope = {
+                aFunction: function() {
+                    return this
+                }
+            }
+            var fn = parse('aFunction()')
+            expect(fn(scope)).toBe(scope)
+        })
+
+        it('binds bare function s on locals to the locals', () => {
+            var scope = {}
+            var locals = {
+                aFunction() {
+                    return this
+                }
+            }
+            var fn = parse('aFunction()')
+            expect(fn(scope, locals)).toBe(locals)
+        })
+
+        it('parses a simple attribute assignment', () => {
+            var fn = parse('a=42')
+            var scope = {}
+            fn(scope)
+            expect(scope.a).toBe(42)
+        })
+
+        it('can assignment any primary Expresssion', () => {
+            var fn = parse('a = aFunction()')
+            var scope = {
+                aFunction() {
+                    return 42
+                }
+            }
+            fn(scope)
+            expect(scope.a).toBe(42)
+        })
+
+        it('can assign a computed object property', () => {
+            var fn = parse('anObject["a"] = 42')
+            var scope = {
+                anObject: {}
+            }
+            fn(scope)
+            expect(scope.anObject.a).toBe(42)
+        })        
+        
+        it('can assign a non-computed object property', () => {
+            var fn = parse('anObject.a = 42')
+            var scope = {
+                anObject: {}
+            }
+            fn(scope)
+            expect(scope.anObject.a).toBe(42)
+        })
+
+        it('can assign a nested object property', () => {
+            var fn = parse('anArray[0].a = 42')
+            var scope = {
+                anArray: [{}]
+            }
+            fn(scope)
+            expect(scope.anArray[0].a).toBe(42)
+        })
+
+        it('creates the objects in the assignment path that do not exist', () => {
+            var fn = parse('some["nested"].property.path=42')
+            var scope = {}
+            fn(scope)
+            expect(scope.some.nested.property.path).toBe(42)
+        })
     })
 
 })
