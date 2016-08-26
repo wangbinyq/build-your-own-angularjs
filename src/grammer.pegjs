@@ -4,9 +4,8 @@
             cls[e] = e.toLowerCase()
         })
     }
-    function AST() {
-
-    }
+    
+    var AST = peg$parse;
     setStaticEnumProperty(AST, [
         'Program',
         'Literal',
@@ -24,10 +23,6 @@
         'LogicalExpression',
         'ConditionalExpression'
     ]);
-    AST.prototype.ast = function(text) {
-        return parse(text)
-    };
-    exports.AST = AST;
 }
 
 program
@@ -182,16 +177,22 @@ unary
     / primary
 
 primary
-    = primaryLeft:primaryLeft _ primaryNext:primaryNext? {
-        if(primaryNext && primaryNext.object) {
-            primaryNext.object = primaryLeft
-            return primaryNext
+    = primaryLeft:primaryLeft _ primaryNext:primaryNext* {
+        var primary = primaryLeft;
+        if(primaryNext.length) {
+            for(var i=0; i<primaryNext.length; i++) {
+                if(primaryNext[i].callee) {
+                    primaryLeft = primary
+                    primary = primaryNext[i]
+                    primary.callee = primaryLeft
+                } else if(primaryNext[i].object) {
+                    primaryLeft = primary
+                    primary = primaryNext[i]
+                    primary.object = primaryLeft
+                }
+            }
         }
-        if(primaryNext && primaryNext.callee) {
-            primaryNext.callee = primaryLeft
-            return primaryNext
-        }
-        return primaryLeft
+        return primary
     }
 
 primaryLeft
@@ -201,8 +202,11 @@ primaryLeft
     / "[" _ arrayDeclaration:arrayDeclaration _ "]" _ {
         return arrayDeclaration
     }
-    / "{" _ object:object _ "}" _ {
-        return object
+    / "{" _ properties:properties _ "}" _ {
+        return {
+            type: AST.ObjectExpression,
+            properties: properties
+        }
     }
     / constants
     / identifier
@@ -241,22 +245,20 @@ arrayDeclaration
         }
     }
     
-object
-	= property:keyvalue _ "," _ properties:object _ {
-        properties.value.unshift(property)
+properties
+	= property:keyvalue _ "," _ properties:properties _ {
+        properties.unshift(property)
         return properties
     }
     / property:keyvalue _ ","? _ {
-        return {
+        return [{
             type: AST.Property,
-            value: [property]
-        }
+            value: property.value,
+            key: property.key
+        }]
     }
     / _ {
-        return {
-            type: AST.Property,
-            value: []
-        }
+        return []
     }
 
 keyvalue
@@ -268,7 +270,7 @@ keyvalue
     }
 
 parseArguments
-	= arg:assignment "," args:parseArguments {
+	= arg:assignment _ "," _ args:parseArguments {
         args.unshift(arg)
         return args
     }
@@ -286,7 +288,7 @@ constants
 	= "null"![a-zA-Z_0-9] {
         return { 
             type: AST.Literal,
-            value: null
+            value: 'null'
         }
     }
     / "true"![a-zA-Z_0-9] {
@@ -321,15 +323,16 @@ constant
     }
 
 string
-    = "'" [^']* "'" {
+    = "'" ("\\'" / [^'])* "'" {
         return text()
     }
-    / '"' [^"]* '"' {
+    / '"' ('\\"' / [^"])* '"' {
         return text()
     }
 
 number
     = int frac? exp? { return parseFloat(text()); }
+    / frac exp? { return parseFloat(text()); }
 
 digit1_9      = [1-9]
 e             = [eE]

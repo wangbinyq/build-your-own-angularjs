@@ -129,7 +129,7 @@ describe('parse', () => {
         })
 
         it('will parse an array with trailing commas', () => {
-            const fn = parse('[1, "two", [3], true], ')
+            const fn = parse('[1, "two", [3], true, ] ')
             expect(fn()).toEqual([1, 'two', [3], true])
         })
 

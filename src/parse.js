@@ -1,5 +1,5 @@
 import _ from './utils'
-import { AST } from './grammer'
+let AST = require('./grammer').parse
 
 
 export class ASTCompiler {
@@ -154,7 +154,7 @@ export class ASTCompiler {
 export class Parser {
     constructor(lexer) {
         this.lexer = lexer
-        this.ast = new AST(this.lexer)
+        this.ast = {ast: AST}
         this.astCompiler = new ASTCompiler(this.ast)
     }
 
