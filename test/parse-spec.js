@@ -3,7 +3,7 @@ import parse from '../src/parse'
 describe('parse', () => {
 
     describe('Literal Expresssions', () => {
-        
+
         it('can parse an integer', () => {
             const fn = parse('42')
             expect(fn).toBeDefined()
@@ -158,14 +158,18 @@ describe('parse', () => {
     describe('Lookup and Function Call Expresssions', () => {
         it('looks up an attribute from the scope', () => {
             const fn = parse('aKey')
-            expect(fn({aKey: 42})).toBe(42)
+            expect(fn({
+                aKey: 42
+            })).toBe(42)
             expect(fn({})).toBeUndefined()
         })
 
         it('returns undefined when looking up attribute from undefined', () => {
             const fn = parse('aKey')
-            expect(fn({aKey: 42})).toBe(42)
-            expect(fn()).toBeUndefined()            
+            expect(fn({
+                aKey: 42
+            })).toBe(42)
+            expect(fn()).toBeUndefined()
         })
 
         it('will parse this', () => {
@@ -177,8 +181,14 @@ describe('parse', () => {
 
         it('looks up a 2-part identifier path from the scope', () => {
             var fn = parse('aKey.anotherKey')
-            expect(fn({aKey: {anotherKey: 42}})).toBe(42)
-            expect(fn({aKey: {}})).toBeUndefined()
+            expect(fn({
+                aKey: {
+                    anotherKey: 42
+                }
+            })).toBe(42)
+            expect(fn({
+                aKey: {}
+            })).toBeUndefined()
             expect(fn({})).toBeUndefined()
             expect(fn()).toBeUndefined()
         })
@@ -190,79 +200,151 @@ describe('parse', () => {
 
         it('looks up a 4-part identifier path from the scope', () => {
             var fn = parse('aKey.secondKey.thirdKey.fourthKey')
-            expect(fn({aKey: {secondKey: {thirdKey: {fourthKey: 42}}}})).toBe(42)
-            expect(fn({aKey: {secondKey: {thirdKey: {}}}})).toBeUndefined()
-            expect(fn({aKey: {}})).toBeUndefined()
+            expect(fn({
+                aKey: {
+                    secondKey: {
+                        thirdKey: {
+                            fourthKey: 42
+                        }
+                    }
+                }
+            })).toBe(42)
+            expect(fn({
+                aKey: {
+                    secondKey: {
+                        thirdKey: {}
+                    }
+                }
+            })).toBeUndefined()
+            expect(fn({
+                aKey: {}
+            })).toBeUndefined()
             expect(fn()).toBeUndefined()
         })
 
         it('uses locals instead of scope when there is a matching key', () => {
             var fn = parse('aKey')
-            var scope = {aKey: 42}
-            var locals = {aKey: 43}
+            var scope = {
+                aKey: 42
+            }
+            var locals = {
+                aKey: 43
+            }
             expect(fn(scope, locals)).toBe(43)
         })
 
         it('does not use locals instead of scope when no matching key', () => {
             var fn = parse('aKey')
-            var scope = {aKey: 42}
-            var locals = {otherKey: 43}
-            expect(fn(scope, locals)).toBe(42)            
+            var scope = {
+                aKey: 42
+            }
+            var locals = {
+                otherKey: 43
+            }
+            expect(fn(scope, locals)).toBe(42)
         })
 
         it('uses locals instead of scope when the first part matches', () => {
             var fn = parse('aKey.anotherKey')
-            var scope = {aKey: {anotherKey: 42}}
-            var locals = {aKey: {}}
+            var scope = {
+                aKey: {
+                    anotherKey: 42
+                }
+            }
+            var locals = {
+                aKey: {}
+            }
             expect(fn(scope, locals)).toBeUndefined()
         })
 
         it('parses a simple computed property access', () => {
             const fn = parse('aKey["anotherKey"]')
-            expect(fn({aKey: {anotherKey: 42}})).toBe(42)
+            expect(fn({
+                aKey: {
+                    anotherKey: 42
+                }
+            })).toBe(42)
         })
-        
+
         it('parses a computed numeric array access', () => {
             var fn = parse('anArray[1]')
-            expect(fn({anArray: [1, 2, 3]})).toBe(2)
+            expect(fn({
+                anArray: [1, 2, 3]
+            })).toBe(2)
         })
 
         it('parses a computed access with another key as property', () => {
             var fn = parse('lock[key]')
-            expect(fn({key: 'theKey', lock: {theKey: 42}})).toBe(42)
+            expect(fn({
+                key: 'theKey',
+                lock: {
+                    theKey: 42
+                }
+            })).toBe(42)
         })
 
-        it('parses computed access with another access as property' , () => {
+        it('parses computed access with another access as property', () => {
             var fn = parse('lock[keys["aKey"]]')
-            expect(fn({keys: {aKey: 'theKey'}, lock: {theKey: 42}})).toBe(42)
+            expect(fn({
+                keys: {
+                    aKey: 'theKey'
+                },
+                lock: {
+                    theKey: 42
+                }
+            })).toBe(42)
         })
 
         it('parses a function call', () => {
             var fn = parse('aFunction()')
-            expect(fn({aFunction:() => {return 42}})).toBe(42)
+            expect(fn({
+                aFunction: () => {
+                    return 42
+                }
+            })).toBe(42)
         })
 
         it('parses a function call with a single number argument', () => {
             var fn = parse('aFunction(42)')
-            expect(fn({aFunction: (a) => {return a}})).toBe(42)
+            expect(fn({
+                aFunction: (a) => {
+                    return a
+                }
+            })).toBe(42)
         })
 
         it('parses a function call with a single identifier argument', () => {
             var fn = parse('aFunction(n)')
-            expect(fn({n: 42, aFunction: (a) => {return a}})).toBe(42)
+            expect(fn({
+                n: 42,
+                aFunction: (a) => {
+                    return a
+                }
+            })).toBe(42)
         })
 
         it('parses a function call with a single function call argument', () => {
             var fn = parse('aFunction(n())')
-            expect(fn({n: () => {return 42}, aFunction: (a) => {return a}})).toBe(42)
+            expect(fn({
+                n: () => {
+                    return 42
+                },
+                aFunction: (a) => {
+                    return a
+                }
+            })).toBe(42)
         })
 
         it('parses a function call with multiple arguments', () => {
             var fn = parse('aFunction(37, n, fn())')
             expect(fn({
-                aFunction: (a1, a2, a3) => {return a1 + a2 + a3},
+                aFunction: (a1, a2, a3) => {
+                    return a1 + a2 + a3
+                },
                 n: 3,
-                fn: () =>{return 2}
+                fn: () => {
+                    return 2
+                }
             })).toBe(42)
         })
 
@@ -340,8 +422,8 @@ describe('parse', () => {
             }
             fn(scope)
             expect(scope.anObject.a).toBe(42)
-        })        
-        
+        })
+
         it('can assign a non-computed object property', () => {
             var fn = parse('anObject.a = 42')
             var scope = {
@@ -366,6 +448,199 @@ describe('parse', () => {
             fn(scope)
             expect(scope.some.nested.property.path).toBe(42)
         })
+
+        it('does not allow calling the function constructor', function() {
+            expect(function() {
+                var fn = parse('aFunction.constructor("return window")()')
+                fn({
+                    aFunction: function() {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow accessing __proto__', function() {
+            expect(function() {
+                var fn = parse('obj.__proto__')
+                fn({
+                    obj: {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling __defineGetter__', function() {
+            expect(function() {
+                var fn = parse('obj.__defineGetter__("evil", fn)')
+                fn({
+                    obj: {},
+                    fn: function() {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling __defineSetter__', function() {
+            expect(function() {
+                var fn = parse('obj.__defineSetter__("evil", fn)')
+                fn({
+                    obj: {},
+                    fn: function() {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling __lookupGetter__', function() {
+            expect(function() {
+                var fn = parse('obj.__lookupGetter__("evil")')
+                fn({
+                    obj: {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling __lookupSetter__', function() {
+            expect(function() {
+                var fn = parse('obj.__lookupSetter__("evil")')
+                fn({
+                    obj: {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow accessing window as computed property', function() {
+            var fn = parse('anObject["wnd"]')
+            expect(function() {
+                fn({
+                    anObject: {
+                        wnd: window
+                    }
+                })
+            }).toThrow()
+        })
+
+        it('does not allow accessing window as non-computed property', function() {
+            var fn = parse('anObject.wnd')
+            expect(function() {
+                fn({
+                    anObject: {
+                        wnd: window
+                    }
+                })
+            }).toThrow()
+        })
+
+        it('does not allow passing window as function argument', function() {
+            var fn = parse('aFunction(wnd)')
+            expect(function() {
+                fn({
+                    aFunction: function() {},
+                    wnd: window
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling methods on window', function() {
+            var fn = parse('wnd.scrollTo(0)')
+            expect(function() {
+                fn({
+                    wnd: window
+                })
+            }).toThrow()
+        })
+
+        it('does not allow returning window', function() {
+            var fn = parse('aFunction()')
+            expect(function() {
+                fn({
+                    aFunction: function() {
+                        return window
+                    }
+                })
+            }).toThrow()
+        })
+
+        it('does not allow assigning window', function() {
+            var fn = parse('wnd = anObject')
+            expect(function() {
+                fn({
+                    anObject: window
+                })
+            }).toThrow()
+        })
+
+        it('does not allow referencing window', function() {
+            var fn = parse('wnd')
+            expect(function() {
+                fn({
+                    wnd: window
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling functions on DOM elements', function() {
+            var fn = parse('el.setAttribute("evil", "true")')
+            expect(function() {
+                fn({
+                    el: document.documentElement
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling the aliased function constructor', function() {
+            var fn = parse('fnConstructor("return window")')
+            expect(function() {
+                fn({
+                    fnConstructor: (function() {}).constructor
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling functions on Object', function() {
+            var fn = parse('obj.create({})')
+            expect(function() {
+                fn({
+                    obj: Object
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling call', function() {
+            var fn = parse('fun.call(obj)')
+            expect(function() {
+                fn({
+                    fun: function() {},
+                    obj: {}
+                })
+            }).toThrow()
+        })
+
+        it('does not allow calling apply', function() {
+            var fn = parse('fun.apply(obj)')
+            expect(function() {
+                fn({
+                    fun: function() {},
+                    obj: {}
+                })
+            }).toThrow()
+        })
+    })
+
+    describe('Operator Expresssions', () => {
+        it('parses a unary +', function() {
+            expect(parse('+42')()).toBe(42)
+            expect(parse('+a')({a: 42})).toBe(42)
+        })
+
+        it('parses replaces undefined with zero for unary +', () => {
+            expect(parse('+a')()).toBe(0)
+        })
+
+        it('parses a unary !', () => {
+            expect(parse('!true')()).toBe(false)
+            expect(parse('!42')()).toBe(false)
+            expect(parse('!a')({a: false})).toBe(true)
+            expect(parse('!!a')({a: false})).toBe(false)
+        })
+
+        it('')
     })
 
 })

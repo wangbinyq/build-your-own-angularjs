@@ -30,11 +30,15 @@ program
 
 filter
     = left:assignment _ filterCall:("|" _ filterCall _)* {
-        filterCall = filterCall.map((filter) => {
-            filter[2].arguments.unshift(left)
-            return filter[2]
-        })
-        return filterCall.length ? filterCall : left
+        var res = left;
+        if(filterCall.length) {
+            for(var i=0; i<filterCall.length; i++) {
+                var filter = filterCall[i][2];
+                filter.arguments.unshift(res);
+                res = filter;
+            }
+        }
+        return res
     }
 
 filterCall

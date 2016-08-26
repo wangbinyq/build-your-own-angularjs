@@ -145,11 +145,15 @@ function peg$parse(input, options) {
       peg$c1 = "|",
       peg$c2 = peg$literalExpectation("|", false),
       peg$c3 = function(left, filterCall) {
-              filterCall = filterCall.map((filter) => {
-                  filter[2].arguments.unshift(left)
-                  return filter[2]
-              })
-              return filterCall.length ? filterCall : left
+              var res = left;
+              if(filterCall.length) {
+                  for(var i=0; i<filterCall.length; i++) {
+                      var filter = filterCall[i][2];
+                      filter.arguments.unshift(res);
+                      res = filter;
+                  }
+              }
+              return res
           },
       peg$c4 = ":",
       peg$c5 = peg$literalExpectation(":", false),
