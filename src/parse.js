@@ -21,44 +21,32 @@ export class ASTCompiler {
             this.state.body.join(' '))
     }
 
-    nextId() {
-        const id = 'v' + (this.state.nextId++)
-        this.state.vars.push(id)
-        return id
-    }
-
     recurse(ast, context, create) {
-        let intoId
+        var intoId
         switch(ast.type) {
         case AST.Program:
-            this.state.body.push('return', this.recurse(ast.body), ';')
+            this.state.body.push('return ', this.recurse(ast.body), ';')
             break
         case AST.Literal:
             return ast.value
         case AST.ArrayExpression:
-            var elements = _.map(ast.elements, (element) => {
-                return this.recurse(element)
+            var elements = _.map(ast.elements, (e) => {
+                return this.recurse(e)
             })
             return '[' + elements.join(',') + ']'
         case AST.ObjectExpression:
-            var properties = _.map(ast.properties, (property) => {
-
-                const key = property.key.type === AST.Identifier ? property.key.name : this.recurse(property.key)
-
-                return key + ':' + this.recurse(property.value)
+            var properties = _.map(ast.properties, (p) => {
+                var key = p.key.type === AST.Identifier ?
+                    p.key.name : p.key.value
+                var value = this.recurse(p.value)
+                return key + ':' + value
             })
             return '{' + properties.join(',') + '}'
         case AST.Identifier:
             intoId = this.nextId()
             this.if_(this.getHasOwnProperty('l', ast.name), 
                 this.assign(intoId, this.nonComputedMember('l', ast.name)))
-            if(create) {
-                this.if_(this.not(this.getHasOwnProperty('l', ast.name)) + 
-                        ' && s &&' + 
-                        this.not(this.getHasOwnProperty('s', ast.name)),
-                    this.assign(this.nonComputedMember('s', ast.name), '{}'))
-            }         
-            this.if_(this.not(this.getHasOwnProperty('l', ast.name)) + ' && s',
+            this.if_(this.not(this.getHasOwnProperty('l', ast.name)) + ' && s', 
                 this.assign(intoId, this.nonComputedMember('s', ast.name)))
             if(context) {
                 context.context = this.getHasOwnProperty('l', ast.name) + '?l:s'
@@ -70,28 +58,20 @@ export class ASTCompiler {
             return 's'
         case AST.MemberExpression:
             intoId = this.nextId()
-            var left = this.recurse(ast.object, undefined, create)
+            var left = this.recurse(ast.object)
             if(context) {
                 context.context = left
             }
             if(ast.computed) {
                 var right = this.recurse(ast.property)
-                if(create) {
-                    this.if_(this.not(this.computedMember(left, right)),
-                        this.assign(this.computedMember(left, right), '{}'))
-                }
-                this.if_(left,
+                this.if_(left, 
                     this.assign(intoId, this.computedMember(left, right)))
                 if(context) {
                     context.name = right
                     context.computed = true
                 }
             } else {
-                if(create) {
-                    this.if_(this.not(this.nonComputedMember(left, ast.property.name)),
-                        this.assign(this.nonComputedMember(left, ast.property.name), '{}'))
-                }
-                this.if_(left,
+                this.if_(left, 
                     this.assign(intoId, this.nonComputedMember(left, ast.property.name)))
                 if(context) {
                     context.name = ast.property.name
@@ -102,14 +82,14 @@ export class ASTCompiler {
         case AST.CallExpression:
             var callContext = {}
             var callee = this.recurse(ast.callee, callContext)
-            var args = _.map(ast.arguments, arg => {
+            var args = _.map(ast.arguments, (arg) => {
                 return this.recurse(arg)
             })
             if(callContext.name) {
                 if(callContext.computed) {
                     callee = this.computedMember(callContext.context, callContext.name)
                 } else {
-                    callee = this.nonComputedMember(callContext.context, callContext.name)
+                    callee = this.nonComputedMember(callContext.context, callContext.name)                    
                 }
             }
             return callee + '&&' + callee + '(' + args.join(',') + ')'
@@ -126,28 +106,34 @@ export class ASTCompiler {
         }
     }
 
-    getHasOwnProperty(object, property) {
-        return object + '&&("' + property +'" in ' + object + ')'
-    }
-
-    not(e) {
-        return `!(${e})`
-    }
-
-    assign(id, value) {
-        return id + '=' + value + ';'
+    nonComputedMember(left, right) {
+        return '(' + left + ').' + right
     }
 
     computedMember(left, right) {
         return '(' + left + ')[' + right + ']'
     }
 
-    nonComputedMember(left, right) {
-        return '(' + left + ').' + right
-    }
-
     if_(test, consequent) {
         this.state.body.push('if(', test, '){', consequent, '}')
+    }
+
+    assign(id, value) {
+        return id + '=' + value + ';'
+    }
+
+    nextId() {
+        var id = 'v' + (this.state.nextId++)
+        this.state.vars.push(id)
+        return id
+    }
+
+    not(e) {
+        return '!(' + e + ')'
+    }
+
+    getHasOwnProperty(object, property) {
+        return object + '&&("' + property + '" in ' +  object + ')'
     }
 }
 
