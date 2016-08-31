@@ -26,7 +26,13 @@
 }
 
 program
-    = _ body:filter { return {type:AST.Program, body: body} }
+    = _ bodys:(filter _ ";" _)* _ last:filter? _ {
+        var body = bodys.length ? bodys.map(b => b[0]) : []
+        if(last) {
+            body.push(last)
+        }
+        return {type:AST.Program, body: body} 
+    }
 
 filter
     = left:assignment _ filterCall:("|" _ filterCall _)* {
@@ -85,7 +91,7 @@ logicalOR
         if(right.length) {
             for(var i=0; i<right.length; i++) {
                 left = {
-                    type: AST.LocalsExpression,
+                    type: AST.LogicalExpression,
                     left: left,
                     operator: '||',
                     right: right[i][2]
@@ -100,7 +106,7 @@ logicalAND
         if(right.length) {
             for(var i=0; i<right.length; i++) {
                 left = {
-                    type: AST.LocalsExpression,
+                    type: AST.LogicalExpression,
                     left: left,
                     operator: '&&',
                     right: right[i][2]

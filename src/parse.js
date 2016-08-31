@@ -39,7 +39,10 @@ export class ASTCompiler {
         var intoId
         switch(ast.type) {
         case AST.Program:
-            this.state.body.push('return ', this.recurse(ast.body), ';')
+            _.forEach(_.initial(ast.body), (stmt) => {
+                this.state.body.push(this.recurse(stmt), ';')
+            })
+            this.state.body.push('return ', this.recurse(_.last(ast.body)), ';')
             break
         case AST.Literal:
             return ast.value
@@ -144,6 +147,31 @@ export class ASTCompiler {
         case AST.UnaryExpression:
             return ast.operator + 
                 '(' + this.ifDefined(this.recurse(ast.argument), 0) + ')'
+        case AST.BinaryExpression:
+            if(ast.operator === '+' || ast.operator === '-') {
+                return '(' + this.ifDefined(this.recurse(ast.left), 0)+ ')' + 
+                    ast.operator + 
+                    '(' + this.ifDefined(this.recurse(ast.right), 0) + ')'
+            } else {
+                return '(' + this.recurse(ast.left) + ')' +
+                    ast.operator + 
+                    '(' + this.recurse(ast.right) + ')'
+            }
+        case AST.LogicalExpression:
+            intoId = this.nextId()
+            this.state.body.push(this.assign(intoId, this.recurse(ast.left)))
+            this.if_(ast.operator === '&&' ? intoId : this.not(intoId), 
+                this.assign(intoId, this.recurse(ast.right)))
+            return intoId
+        case AST.ConditionalExpression:
+            intoId = this.nextId()
+            var testId = this.nextId()
+            this.state.body.push(this.assign(testId, this.recurse(ast.test)))
+            this.if_(testId,
+                this.assign(intoId, this.recurse(ast.consequent)))
+            this.if_(this.not(testId),
+                this.assign(intoId, this.recurse(ast.alternate)))
+            return intoId
         }
     }
 
