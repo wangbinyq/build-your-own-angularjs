@@ -1,6 +1,6 @@
 import _ from './utils'
-let AST = require('./grammer').parse
-
+import { filter } from './filter'
+import { parse as AST } from './grammer'
 
 export class ASTCompiler {
     constructor(astBuilder) {
@@ -12,11 +12,13 @@ export class ASTCompiler {
         this.state = {
             body: [],
             nextId: 0,
-            vars: []
+            vars: [],
+            filters: {}
         }
         this.recurse(ast)
 
-        var fnString = 'var fn=function(s,l){' + 
+        var fnString = this.filterPrefix() +
+            'var fn=function(s,l){' + 
             (this.state.vars.length ? 
                 'var ' + this.state.vars.join(',') + ';' :
                 ''
@@ -28,11 +30,13 @@ export class ASTCompiler {
             'ensureSafeObject',
             'ensureSafeFunction',
             'ifDefined',
+            'filter',
              fnString)(
                  ensureSafeMemberName,
                  ensureSafeObject,
                  ensureSafeFunction,
-                 ifDefined)
+                 ifDefined,
+                 filter)
     }
 
     recurse(ast, context, create) {
@@ -118,9 +122,17 @@ export class ASTCompiler {
             }
             return intoId
         case AST.CallExpression:
-            var callContext = {}
-            var callee = this.recurse(ast.callee, callContext)
-            var args = _.map(ast.arguments, (arg) => {
+            var callContext, callee, args
+            if(ast.filter) {
+                callee = this.filter(ast.callee.name)
+                args = _.map(ast.arguments, (arg) => {
+                    return this.recurse(arg)
+                })
+                return callee + '(' + args + ')'
+            }
+            callContext = {}
+            callee = this.recurse(ast.callee, callContext)
+            args = _.map(ast.arguments, (arg) => {
                 return 'ensureSafeObject(' + this.recurse(arg) + ')'
             })
             if(callContext.name) {
@@ -191,9 +203,11 @@ export class ASTCompiler {
         return id + '=' + value + ';'
     }
 
-    nextId() {
+    nextId(skip=false) {
         var id = 'v' + (this.state.nextId++)
-        this.state.vars.push(id)
+        if(!skip) {
+            this.state.vars.push(id)
+        }
         return id
     }
 
@@ -219,6 +233,24 @@ export class ASTCompiler {
 
     ifDefined(value, defaultValue) {
         return 'ifDefined(' + value + ',' + defaultValue + ')'
+    }
+
+    filter(name) {
+        if(!this.state.filters.hasOwnProperty(name)) {
+            this.state.filters[name] = this.nextId(true)    
+        }
+        return this.state.filters[name]
+    }
+
+    filterPrefix() {
+        if(_.isEmpty(this.state.filters)) {
+            return ''
+        } else {
+            var parts = _.map(this.state.filters, (varName, filterName) => {
+                return varName + '=' + 'filter("' + filterName + '")'
+            })
+            return 'var ' + parts.join(',') + ';'
+        }
     }
 }
 
