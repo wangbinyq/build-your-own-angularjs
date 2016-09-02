@@ -1,5 +1,3 @@
-/*eslint no-unused-vars: 0*/
-
 import { Scope } from '../src/scope'
 import _ from 'lodash'
 

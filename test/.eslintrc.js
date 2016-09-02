@@ -14,6 +14,7 @@ module.exports = {
   "rules": {
     "no-multi-str": 0,
     "object-curly-spacing": 0,
-    "array-bracket-spacing": 0
+    "array-bracket-spacing": 0,
+    "no-unused-vars": 0
   }
 }
