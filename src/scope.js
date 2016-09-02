@@ -1,4 +1,5 @@
 import _ from './utils'
+import parse from './parse'
 
 function initWatchVal() {}
 
@@ -19,7 +20,7 @@ export class Scope {
 
     $watch(watchFn, listenerFn=() => {}, valueEq=false) {
         var watcher = {
-            watchFn,
+            watchFn: parse(watchFn),
             listenerFn,
             valueEq,
             last: initWatchVal
@@ -115,6 +116,7 @@ export class Scope {
     }
 
     $eval(expr, locals) {
+        expr = parse(expr)
         return expr(this, locals)
     }
 
@@ -243,6 +245,8 @@ export class Scope {
         let listenerOldValue
         let tracklistenerOldValue = listenerFn.length > 1
         let firstRun = true
+
+        watchFn = parse(watchFn)
 
         const internalWatchFn = (scope) => {
             let newLength

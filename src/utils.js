@@ -12,9 +12,3 @@ _.mixin({
 })
 
 export default _
-
-export function setStaticEnumProperty(cls, property) {
-    property.forEach((e) => {
-        cls[e] = e.toLowerCase()
-    })
-}
