@@ -19,8 +19,14 @@ export class Scope {
     }
 
     $watch(watchFn, listenerFn=() => {}, valueEq=false) {
+
+        watchFn = parse(watchFn)
+        if(watchFn.$$watchDelegate) {
+            return watchFn.$$watchDelegate(this, listenerFn, valueEq, watchFn)
+        }
+
         var watcher = {
-            watchFn: parse(watchFn),
+            watchFn: watchFn,
             listenerFn,
             valueEq,
             last: initWatchVal

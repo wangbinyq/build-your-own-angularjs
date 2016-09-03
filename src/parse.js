@@ -9,11 +9,12 @@ export class ASTCompiler {
 
     compile(text) {
         const ast = this.astBuilder.ast(text)
-        markConstantExpressions(ast)
+        markConstantAndWatchExpressions(ast)
         this.state = {
             body: [],
             nextId: 0,
             vars: [],
+            fn: {body: [], var: []},
             filters: {}
         }
         this.recurse(ast)
@@ -309,76 +310,189 @@ function isLiteral(ast) {
         )
 }
 
-function markConstantExpressions(ast) {
+function markConstantAndWatchExpressions(ast) {
     var allConstants
+    var argsToWatch
     switch(ast.type) {
     case AST.Program:
         allConstants = true
         _.forEach(ast.body, (expr) => {
-            markConstantExpressions(expr)
+            markConstantAndWatchExpressions(expr)
             allConstants = allConstants && expr.constant
         })
         ast.constant = allConstants
         break
     case AST.Literal:
         ast.constant = true
+        ast.toWatch = []
         break
     case AST.Identifier:
         ast.constant = false
+        ast.toWatch = [ast]
         break
     case AST.ArrayExpression:
         allConstants = true
+        argsToWatch = []
         _.forEach(ast.elements, (element) => {
-            markConstantExpressions(element)
+            markConstantAndWatchExpressions(element)
             allConstants = allConstants && element.constant
+            if(!element.constant) {
+                argsToWatch.push.apply(argsToWatch, element.toWatch)
+            }
         })
         ast.constant = allConstants
+        ast.toWatch = argsToWatch
         break
     case AST.ObjectExpression:
         allConstants = true
+        argsToWatch = []
         _.forEach(ast.properties, (property) => {
-            markConstantExpressions(property.value)
+            markConstantAndWatchExpressions(property.value)
             allConstants = allConstants && property.value.constant
+            if(!property.value.constant) {
+                argsToWatch.push.apply(argsToWatch, property.value.toWatch)
+            }
         })
         ast.constant = allConstants
+        ast.toWatch = argsToWatch
         break
     case AST.ThisExpression:
         ast.constant = false
+        ast.toWatch = []
         break
     case AST.MemberExpression:
-        markConstantExpressions(ast.object)
+        markConstantAndWatchExpressions(ast.object)
         if(ast.computed) {
-            markConstantExpressions(ast.property)
+            markConstantAndWatchExpressions(ast.property)
         }
         ast.constant = ast.object.constant && (!ast.computed || ast.property.constant)
+        ast.toWatch = [ast]
         break
     case AST.CallExpression:
         allConstants = !!ast.filter
+        argsToWatch = []
         _.forEach(ast.arguments, (arg) => {
-            markConstantExpressions(arg)
+            markConstantAndWatchExpressions(arg)
             allConstants = allConstants && arg.constant
+            if(!arg.constant) {
+                argsToWatch.push.apply(argsToWatch, arg.toWatch)
+            }
         })
         ast.constant = allConstants
+        ast.toWatch = ast.filter ? argsToWatch : [ast]
         break
     case AST.AssignmentExpression:
-    case AST.BinaryExpression:
-    case AST.LogicalExpression:
-        markConstantExpressions(ast.left)
-        markConstantExpressions(ast.right)
+        markConstantAndWatchExpressions(ast.left)
+        markConstantAndWatchExpressions(ast.right)
         ast.constant = ast.left.constant && ast.right.constant
+        ast.toWatch = [ast]
         break
     case AST.UnaryExpression:
-        markConstantExpressions(ast.argument)
+        markConstantAndWatchExpressions(ast.argument)
         ast.constant = ast.argument.constant
+        ast.toWatch = ast.argument.toWatch
+        break
+    case AST.BinaryExpression:
+        markConstantAndWatchExpressions(ast.left)
+        markConstantAndWatchExpressions(ast.right)
+        ast.constant = ast.left.constant && ast.right.constant
+        ast.toWatch = ast.left.toWatch.concat(ast.right.toWatch)
+        break
+    case AST.LogicalExpression:
+        markConstantAndWatchExpressions(ast.left)
+        markConstantAndWatchExpressions(ast.right)
+        ast.constant = ast.left.constant && ast.right.constant
+        ast.toWatch = [ast]
         break
     case AST.ConditionalExpression:
-        markConstantExpressions(ast.test)
-        markConstantExpressions(ast.consequent)
-        markConstantExpressions(ast.alternate)
+        markConstantAndWatchExpressions(ast.test)
+        markConstantAndWatchExpressions(ast.consequent)
+        markConstantAndWatchExpressions(ast.alternate)
         ast.constant =
             ast.test.constant && ast.consequent.constant && ast.alternate.constant
+        ast.toWatch = [ast]
         break
     }
+}
+
+function constantWatchDelegate(scope, listenerFn, valueEq, watchFn) {
+    var unwatch = scope.$watch(() => {
+        return watchFn(scope)
+    }, function() {
+        if(_.isFunction(listenerFn)) {
+            listenerFn.apply(this, arguments)
+        }
+        unwatch()
+    }, valueEq)
+    return unwatch
+}
+
+function oneTimeWatchDelegate(scope, listenerFn, valueEq, watchFn) {
+    var lastValue
+    var unwatch = scope.$watch(() => {
+        return watchFn(scope)
+    }, function(newValue, oldValue, scope) {
+        lastValue = newValue
+        if(_.isFunction(listenerFn)) {
+            listenerFn.apply(this, arguments)
+        }
+        if(!_.isUndefined(newValue)) {
+            scope.$$postDigest(() => {
+                if(!_.isUndefined(lastValue)) {
+                    unwatch()
+                }
+            })
+        }
+    }, valueEq)
+    return unwatch    
+}
+
+function oneTimeLiteralWatchDelegate(scope, listenerFn, valueEq, watchFn) {
+    function isAllDefined(val) {
+        return !_.some(val, _.isUndefined)
+    }
+    var unwatch = scope.$watch(() => {
+        return watchFn(scope)
+    }, function(newValue, oldValue, scope) {
+        if(_.isFunction(listenerFn)) {
+            listenerFn.apply(this, arguments)
+        }
+        if(isAllDefined(newValue)) {
+            scope.$$postDigest(() => {
+                if(isAllDefined(newValue)) {
+                    unwatch()
+                }
+            })
+        }
+    }, valueEq)
+    return unwatch    
+}
+
+function inputsWatchDelegate(scope, listenerFn, valueEq, watchFn) {
+    var inputExpressions = watchFn.inputs
+    var oldValues = _.times(inputExpressions.length, _.constant(() => {}))
+    var lastResult
+
+    return scope.$watch(() => {
+        var changed = false
+        _.forEach(inputExpressions, (inputExpr, i) => {
+            var newValue = inputExpr(scope)
+            if(changed || !expressionInputDirtyCheck(newValue, oldValues[i])) {
+                changed = true
+                oldValues[i] = newValue
+            }
+        })
+        if(changed) {
+            lastResult = watchFn(scope)
+        }
+        return lastResult
+    }, listenerFn, valueEq)
+}
+
+function expressionInputDirtyCheck(newValue, oldValue) {
+    return newValue === oldValue ||
+        (typeof newValue === 'number' && typeof oldValue === 'number' &&
+        isNaN(newValue) && isNaN(oldValue))
 }
 
 export class Parser {
@@ -397,7 +511,21 @@ export function parse(expr) {
     switch(typeof expr) {
     case 'string':
         var parser = new Parser()
-        return parser.parse(expr)
+        var oneTime = false
+        if(expr.charAt(0) == ':' && expr.charAt(1) == ':') {
+            oneTime = true
+            expr = expr.substring(2)
+        }
+        var parseFn = parser.parse(expr)
+        if(parseFn.constant) {
+            parseFn.$$watchDelegate = constantWatchDelegate
+        } else if (oneTime) {
+            parseFn.$$watchDelegate = parseFn.literal ? oneTimeLiteralWatchDelegate :
+                                                        oneTimeWatchDelegate
+        } else if (parseFn.inputs) {
+            parseFn.$$watchDelegate = inputsWatchDelegate
+        }
+        return parseFn
     case 'function':
         return expr
     default:
