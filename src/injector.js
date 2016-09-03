@@ -8,18 +8,20 @@ var INSTANTIATING = {}
 export default function(modulesToLoad, strictDi) {
 
     var providerCache = {}
-    var providerInjector = createInternalInjector(providerCache, function() {
-        throw 'Unknown provider: ' + path.join(' <- ')
-    })
+    var providerInjector = providerCache.$injector =
+        createInternalInjector(providerCache, function() {
+            throw 'Unknown provider: ' + path.join(' <- ')
+        })
     var instanceCache = {}
-    var InstanceInjector = createInternalInjector(instanceCache, function(name) {
-        var provider = providerInjector.get(name + 'Provider')
-        return InstanceInjector.invoke(provider.$get, provider)
-    })
+    var InstanceInjector = instanceCache.$injector = 
+        createInternalInjector(instanceCache, function(name) {
+            var provider = providerInjector.get(name + 'Provider')
+            return InstanceInjector.invoke(provider.$get, provider)
+        })
     var loadedModule = {}
     var path = []
     strictDi = (strictDi === true)
-    var $provide = {
+    providerCache.$provide = {
         constant(key, value) {
             if(key === 'hasOwnProperty') {
                 throw 'hasOwnProperty is not a valid constant name!'
@@ -121,7 +123,7 @@ export default function(modulesToLoad, strictDi) {
             _.forEach(module._invokeQueue, (invokeArgs) => {
                 var method = invokeArgs[0]
                 var args = invokeArgs[1]
-                $provide[method].apply($provide, args)
+                providerCache.$provide[method].apply(providerCache.$provide, args)
             })
         }
     })
